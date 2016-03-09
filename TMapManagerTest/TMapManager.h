@@ -23,9 +23,6 @@ struct BoolRefCount_t
 };
 
 template<class T>
-class Ref;
-
-template<class T>
 class TMapManager
 {
 protected:
@@ -42,14 +39,7 @@ protected:
 public:
 	typedef TMapManager<T> MapManagerType_t;
 
-	virtual ~TMapManager();
-	virtual Ref<T> get(const std::string& name) const;
-	virtual void add(const std::string& name, T* instance);
-	virtual void remove(const std::string& name);
-	virtual void destroy();
-	virtual void release(BoolRefCount_t* dirty);
 
-	template<class T>
 	class Ref
 	{
 		std::string name;
@@ -104,16 +94,22 @@ public:
 			return *ref;
 		}
 	};
-};
 
-template<class T>
-TMapManager<T>::Ref<T> TMapManager<T>::get(const std::string& name) const
-{
-	BoolRefCount_t* dirty = new BoolRefCount_t();
-	dirtyReferencesSet_t.insert(dirty);
-	T* ref = get_internal(name);
-	return new Ref<T>(name, ref, dirty, this);
-}
+	virtual ~TMapManager();
+
+	virtual Ref get(const std::string& name)
+	{
+		BoolRefCount_t* dirty = new BoolRefCount_t();
+		m_dirtyReferences.insert(dirty);
+		T* ref = get_internal(name);
+		return Ref(name, ref, dirty, this);
+	}
+
+	virtual void add(const std::string& name, T* instance);
+	virtual void remove(const std::string& name);
+	virtual void destroy();
+	virtual void release(BoolRefCount_t* dirty);
+};
 
 template<class T>
 void TMapManager<T>::add(const std::string& name, T* instance)
@@ -138,13 +134,13 @@ TMapManager<T>::~TMapManager()
 template<class T>
 void TMapManager<T>::destroy()
 {
-	for (auto r : m_resources)
+	for (auto &r : m_resources)
 	{
-		delete r->second;
+		delete r.second;
 	}
 	m_resources.clear();
 
-	for (auto d : dirtyReferencesSet_t)
+	for (auto d : m_dirtyReferences)
 	{
 		d->b = true;
 	}
@@ -156,7 +152,7 @@ void TMapManager<T>::release(BoolRefCount_t* dirty)
 	dirty->c--;
 	if (!dirty->c)
 	{
-		m_dirtyReferences.remove(dirty);
+		m_dirtyReferences.erase(dirty);
 		delete dirty;
 	}
 }
